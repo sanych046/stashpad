@@ -3,6 +3,7 @@
 Primary client application for Android devices. This serves as the main storage location for all notes and handles encryption/decryption of user data.
 
 ## Features
+
 - Create, modify, delete, and share notes
 - Support for various media types (text, audio, video, documents)
 - End-to-end encryption
@@ -10,8 +11,10 @@ Primary client application for Android devices. This serves as the main storage 
 - Synchronization with web clients
 
 ## Architecture
+
 <!-- - Built with Android SDK -->
-- Built with Flutter
-- Local encrypted storage
-- Communication layer for sync with server
-- Camera integration for QR code scanning
+
+- Built with Flutter (Dart)
+- Local encrypted storage using `sqflite` + `sqlcipher`
+- Communication layer using `web_socket_channel`
+- Secure QR scanning with `mobile_scanner`

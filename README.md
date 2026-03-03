@@ -10,17 +10,17 @@ Stashpad is designed to provide users with a secure way to store and access note
 
 ### Components
 
-1. **stashpad-android**: Primary client application for Android devices
+1. **stashpad-android**: Primary client application (Flutter)
    - Main storage location for all user data
    - Handles encryption/decryption of notes
    - Authenticates web client access via QR code
 
-2. **stashpad-web**: Browser-based client application
+2. **stashpad-web**: Flutter Web client application
    - Lightweight client with no persistent storage
    - Connects to mobile device for data access
    - Receives and decrypts data from mobile device
 
-3. **stashpad-server**: Coordination server
+3. **stashpad-server**: Coordination server (Python/FastAPI)
    - Acts as a "dumb pipe" between clients
    - Coordinates authentication process
    - Relays encrypted data without accessing content
