@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+dist/
+build/
+.next/
+out/
+.gradle/
+*.class
+*.jar
+*.war
+target/
+
+# Environment and Secrets
+.env
+.env.local
+.env.*.local
+secrets/
+*.pem
+*.key
+
+# IDE and System
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Misc
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*

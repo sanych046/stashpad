@@ -1,0 +1,56 @@
+# --- Secrets and Sensitive Data ---
+.env
+.env.*
+*.pem
+*.key
+.ssh/
+secrets.json
+credentials.json
+secrets/
+
+# --- System Paths and Logs ---
+/etc/
+/var/
+/usr/
+/bin/
+~/.bashrc
+~/.zshrc
+~/.config/
+
+# --- NodeJS / TypeScript ---
+node_modules/
+dist/
+build/
+.npm/
+
+# --- Python ---
+__pycache__/
+.venv/
+env/
+venv/
+*.pyc
+
+# --- Java / Kotlin / Maven / Gradle ---
+target/
+build/
+.gradle/
+.m2/
+bin/
+*.class
+
+# --- C++ / CMake ---
+out/
+debug/
+release/
+CMakeFiles/
+CMakeCache.txt
+
+# --- Logs and IDE ---
+*.log
+.git/
+.idea/
+.vscode/
+.DS_Store
+
+# --- Parent Directory Lock ---
+../**/
