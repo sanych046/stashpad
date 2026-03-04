@@ -14,10 +14,3 @@ services:
       - "8080:80"
     depends_on:
       - stashpad-server
-  agent-sandbox:
-    build:
-      context: .devcontainer
-      dockerfile: Dockerfile
-    volumes:
-      - ..:/workspace:cached
-    command: /bin/sh -c "while sleep 1000; do :; done"
