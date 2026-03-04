@@ -43,3 +43,20 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# SQLite databases
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Android machine-specific and sensitive files
+**/android/local.properties
+**/android/key.properties
+**/android/.gradle
+*.keystore
+*.jks
+
+# Flutter generated
+.flutter-plugins
+.flutter-plugins-dependencies
