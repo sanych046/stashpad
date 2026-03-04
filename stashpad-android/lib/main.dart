@@ -1,7 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'services/database_service.dart';
+import 'screens/home_screen.dart';
 
 void main() {
-  runApp(const StashpadApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        Provider<DatabaseService>(
+          create: (_) => DatabaseService(),
+        ),
+      ],
+      child: const StashpadApp(),
+    ),
+  );
 }
 
 class StashpadApp extends StatelessWidget {
@@ -26,55 +38,7 @@ class StashpadApp extends StatelessWidget {
         useMaterial3: true,
       ),
       themeMode: ThemeMode.system,
-      home: const WelcomeScreen(),
-    );
-  }
-}
-
-class WelcomeScreen extends StatelessWidget {
-  const WelcomeScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Stashpad Secure Notes'),
-        centerTitle: true,
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(
-              Icons.lock_outline,
-              size: 80,
-              color: Colors.deepPurple,
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'Your Data, Encrypted.',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'End-to-end encrypted notes,\nsecured on your device.',
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 48),
-            FilledButton.icon(
-              onPressed: () {},
-              icon: const Icon(Icons.add),
-              label: const Text('Create New Stash'),
-            ),
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              onPressed: () {},
-              icon: const Icon(Icons.qr_code_scanner),
-              label: const Text('Connect Web Client'),
-            ),
-          ],
-        ),
-      ),
+      home: const HomeScreen(),
     );
   }
 }

@@ -89,11 +89,46 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Stashes'),
+        title: const Text('Stashpad'),
+        elevation: 0,
+        scrolledUnderElevation: 2,
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
-            onPressed: () {},
+            onPressed: () {
+              // TODO: Implement search
+            },
+          ),
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'connect') {
+                _showConnectWebClient(context);
+              } else if (value == 'settings') {
+                _showSettings(context);
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'connect',
+                child: Row(
+                  children: [
+                    Icon(Icons.qr_code_scanner, size: 20),
+                    SizedBox(width: 12),
+                    Text('Connect Web client'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'settings',
+                child: Row(
+                  children: [
+                    Icon(Icons.settings_outlined, size: 20),
+                    SizedBox(width: 12),
+                    Text('Settings'),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -109,11 +144,17 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.note_alt_outlined, size: 64, color: Colors.grey[400]),
+                  Icon(
+                    Icons.lightbulb_outline, 
+                    size: 120, 
+                    color: Theme.of(context).colorScheme.outlineVariant
+                  ),
                   const SizedBox(height: 16),
                   Text(
-                    'No stashes yet',
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.grey),
+                    'Notes you add appear here',
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: Theme.of(context).colorScheme.outline
+                    ),
                   ),
                 ],
               ),
@@ -123,87 +164,166 @@ class _HomeScreenState extends State<HomeScreen> {
           final notes = snapshot.data!;
           return ListView.builder(
             itemCount: notes.length,
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             itemBuilder: (context, index) {
               final note = notes[index];
               return Card(
-                elevation: 0,
-                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-                margin: const EdgeInsets.symmetric(vertical: 4),
-                child: ListTile(
-                  leading: const CircleAvatar(
-                    child: Icon(Icons.description_outlined),
+                elevation: 1,
+                margin: const EdgeInsets.only(bottom: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                    width: 0.5,
                   ),
-                  title: Text(note.title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        note.content.isEmpty ? 'Empty stash' : note.content,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (note.attachments.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4.0),
-                          child: Row(
-                            children: [
-                              Icon(Icons.attach_file, size: 12, color: Theme.of(context).colorScheme.primary),
-                              const SizedBox(width: 4),
-                              Text(
-                                '${note.attachments.length} attachment${note.attachments.length > 1 ? 's' : ''}',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: Theme.of(context).colorScheme.primary,
+                ),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => _editNote(context, note),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                note.title,
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
-                            ],
+                            ),
+                            PopupMenuButton<String>(
+                              icon: const Icon(Icons.more_vert, size: 20),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              onSelected: (value) {
+                                if (value == 'delete') _confirmDelete(context, note);
+                              },
+                              itemBuilder: (context) => [
+                                PopupMenuItem(
+                                  value: 'delete',
+                                  child: Text(
+                                    'Delete',
+                                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        if (note.content.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            note.content,
+                            maxLines: 5,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodyMedium,
                           ),
-                        ),
-                    ],
+                        ],
+                        if (note.attachments.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: note.attachments.take(3).map((a) => Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.secondaryContainer,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    _getIconForMime(a.mimeType), 
+                                    size: 14,
+                                    color: Theme.of(context).colorScheme.onSecondaryContainer,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Flexible(
+                                    child: Text(
+                                      a.filename,
+                                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                        color: Theme.of(context).colorScheme.onSecondaryContainer,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )).toList(),
+                          ),
+                          if (note.attachments.length > 3)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                '+${note.attachments.length - 3} more',
+                                style: Theme.of(context).textTheme.labelSmall,
+                              ),
+                            ),
+                        ],
+                      ],
+                    ),
                   ),
-                  trailing: PopupMenuButton<String>(
-                    onSelected: (value) {
-                      if (value == 'edit') {
-                        _editNote(context, note);
-                      } else if (value == 'delete') {
-                        _confirmDelete(context, note);
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(
-                        value: 'edit',
-                        child: Row(
-                          children: [
-                            Icon(Icons.edit_outlined, size: 20),
-                            SizedBox(width: 8),
-                            Text('Edit'),
-                          ],
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: 'delete',
-                        child: Row(
-                          children: [
-                            Icon(Icons.delete_outline, size: 20, color: Theme.of(context).colorScheme.error),
-                            const SizedBox(width: 8),
-                            Text('Delete', style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  onTap: () => _editNote(context, note),
                 ),
               );
             },
           );
         },
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton.large(
         onPressed: () => _createNewNote(context),
-        icon: const Icon(Icons.add),
-        label: const Text('New Stash'),
+        elevation: 2,
+        child: const Icon(Icons.add),
       ),
     );
+  }
+
+  void _showConnectWebClient(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Connect Web Client'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.qr_code_scanner, size: 64),
+            SizedBox(height: 16),
+            Text('Scan the QR code on the stashpad web application to sync your notes.'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+          FilledButton(
+            onPressed: () {
+              // TODO: Implement actual QR scanning
+              Navigator.pop(context);
+            },
+            child: const Text('Scan Now'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSettings(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Settings coming soon!')),
+    );
+  }
+
+  IconData _getIconForMime(String mimeType) {
+    if (mimeType.startsWith('image/')) return Icons.image;
+    if (mimeType.startsWith('video/')) return Icons.movie;
+    if (mimeType.startsWith('audio/')) return Icons.audiotrack;
+    return Icons.insert_drive_file;
   }
 }

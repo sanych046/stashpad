@@ -1,19 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
+import 'package:provider/provider.dart';
 import 'package:stashpad_android/main.dart';
+import 'package:stashpad_android/services/database_service.dart';
 
 void main() {
-  testWidgets('Welcome screen UI test', (WidgetTester tester) async {
+  testWidgets('Home screen UI test', (WidgetTester tester) async {
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const StashpadApp());
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          Provider<DatabaseService>(
+            create: (_) => DatabaseService(),
+          ),
+        ],
+        child: const StashpadApp(),
+      ),
+    );
 
-    // Verify that the title and key elements are present
-    expect(find.text('Stashpad Secure Notes'), findsOneWidget);
-    expect(find.text('Your Data, Encrypted.'), findsOneWidget);
+    // Verify that the title is present
+    expect(find.text('Stashpad'), findsWidgets);
     
     // Verify buttons are present
     expect(find.byIcon(Icons.add), findsOneWidget);
-    expect(find.byIcon(Icons.qr_code_scanner), findsOneWidget);
+    expect(find.byIcon(Icons.search), findsOneWidget);
   });
 }
