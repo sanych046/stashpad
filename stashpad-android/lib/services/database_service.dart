@@ -144,4 +144,27 @@ class DatabaseService {
       whereArgs: [id],
     );
   }
+
+  Future<List<Note>> searchNotes(String query) async {
+    final db = await database;
+    final List<Map<String, dynamic>> noteMaps = await db.query(
+      'notes',
+      where: 'title LIKE ? OR content LIKE ?',
+      whereArgs: ['%$query%', '%$query%'],
+      orderBy: 'updatedAt DESC',
+    );
+
+    List<Note> notes = [];
+    for (var noteMap in noteMaps) {
+      final List<Map<String, dynamic>> attachmentMaps = await db.query(
+        'attachments',
+        where: 'noteId = ?',
+        whereArgs: [noteMap['id']],
+      );
+
+      final attachments = attachmentMaps.map((m) => Attachment.fromMap(m)).toList();
+      notes.add(Note.fromMap(noteMap, attachments: attachments));
+    }
+    return notes;
+  }
 }

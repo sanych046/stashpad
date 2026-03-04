@@ -95,8 +95,14 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
-            onPressed: () {
-              // TODO: Implement search
+            onPressed: () async {
+              final Note? selectedNote = await showSearch<Note?>(
+                context: context,
+                delegate: NoteSearchDelegate(databaseService: databaseService),
+              );
+              if (selectedNote != null && context.mounted) {
+                _editNote(context, selectedNote);
+              }
             },
           ),
           PopupMenuButton<String>(
@@ -325,5 +331,93 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mimeType.startsWith('video/')) return Icons.movie;
     if (mimeType.startsWith('audio/')) return Icons.audiotrack;
     return Icons.insert_drive_file;
+  }
+}
+
+class NoteSearchDelegate extends SearchDelegate<Note?> {
+  final DatabaseService databaseService;
+
+  NoteSearchDelegate({required this.databaseService});
+
+  @override
+  List<Widget>? buildActions(BuildContext context) {
+    return [
+      IconButton(
+        icon: const Icon(Icons.clear),
+        onPressed: () {
+          query = '';
+        },
+      ),
+    ];
+  }
+
+  @override
+  Widget? buildLeading(BuildContext context) {
+    return IconButton(
+      icon: const Icon(Icons.arrow_back),
+      onPressed: () {
+        close(context, null);
+      },
+    );
+  }
+
+  @override
+  Widget buildResults(BuildContext context) {
+    return _buildSearchResults();
+  }
+
+  @override
+  Widget buildSuggestions(BuildContext context) {
+    if (query.isEmpty) {
+      return const Center(child: Text('Search stashes by keyword'));
+    }
+    return _buildSearchResults();
+  }
+
+  Widget _buildSearchResults() {
+    return FutureBuilder<List<Note>>(
+      future: databaseService.searchNotes(query),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(child: Text('No matches found'));
+        }
+
+        final notes = snapshot.data!;
+        return ListView.builder(
+          itemCount: notes.length,
+          padding: const EdgeInsets.all(8),
+          itemBuilder: (context, index) {
+            final note = notes[index];
+            return Card(
+              elevation: 1,
+              margin: const EdgeInsets.only(bottom: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                  width: 0.5,
+                ),
+              ),
+              child: ListTile(
+                title: Text(note.title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Text(
+                  note.content,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                onTap: () {
+                  close(context, note);
+                  // The Home screen handles opening the editor after the search closes
+                },
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 }
