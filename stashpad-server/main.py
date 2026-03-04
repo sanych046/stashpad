@@ -1,0 +1,103 @@
+import asyncio
+import json
+import uuid
+import logging
+from typing import Dict, Set, Optional
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, status
+from pydantic import BaseModel
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("stashpad-server")
+
+app = FastAPI(title="Stashpad Coordination Server")
+
+# In-memory stores for pairing and active relays
+# QR Session Store: session_id -> { "created_at": timestamp, "authorized": bool, "peer_id": optional }
+qr_sessions: Dict[str, dict] = {}
+
+# Connection Manager for WebSockets
+class ConnectionManager:
+    def __init__(self):
+        # user_id -> set of active WebSockets
+        self.active_connections: Dict[str, Set[WebSocket]] = {}
+
+    async def connect(self, user_id: str, websocket: WebSocket):
+        await websocket.accept()
+        if user_id not in self.active_connections:
+            self.active_connections[user_id] = set()
+        self.active_connections[user_id].add(websocket)
+        logger.info(f"Client connected for user {user_id}. Active connections: {len(self.active_connections[user_id])}")
+
+    def disconnect(self, user_id: str, websocket: WebSocket):
+        if user_id in self.active_connections:
+            self.active_connections[user_id].discard(websocket)
+            if not self.active_connections[user_id]:
+                del self.active_connections[user_id]
+        logger.info(f"Client disconnected for user {user_id}")
+
+    async def relay_to_user(self, user_id: str, message: dict, exclude: Optional[WebSocket] = None):
+        if user_id in self.active_connections:
+            connections = self.active_connections[user_id]
+            data = json.dumps(message)
+            tasks = []
+            for connection in connections:
+                if connection != exclude:
+                    tasks.append(connection.send_text(data))
+            if tasks:
+                await asyncio.gather(*tasks)
+
+manager = ConnectionManager()
+
+class QRSessionRequest(BaseModel):
+    session_id: str
+
+@app.post("/api/auth/request")
+async def request_session(request: QRSessionRequest):
+    """Web client requests a new pairing session."""
+    session_id = request.session_id
+    qr_sessions[session_id] = {
+        "authorized": False,
+        "peer_id": None
+    }
+    logger.info(f"Session request: {session_id}")
+    return {"status": "ok", "message": "Session initiated"}
+
+@app.post("/api/auth/verify")
+async def verify_session(session_id: str, user_id: str):
+    """Mobile device verifies and authorizes the session."""
+    if session_id not in qr_sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    qr_sessions[session_id]["authorized"] = True
+    qr_sessions[session_id]["peer_id"] = user_id
+    logger.info(f"Session {session_id} authorized for user {user_id}")
+    return {"status": "ok", "message": "Session authorized"}
+
+@app.websocket("/ws/{user_id}")
+async def websocket_endpoint(websocket: WebSocket, user_id: str):
+    await manager.connect(user_id, websocket)
+    try:
+        while True:
+            # Wait for data from one client
+            data = await websocket.receive_text()
+            message = json.loads(data)
+            
+            # Relay encrypted payload to all other clients of the same user
+            # The server does not decrypt the 'payload' field
+            logger.info(f"Relaying message type '{message.get('type')}' for user {user_id}")
+            await manager.relay_to_user(user_id, message, exclude=websocket)
+            
+    except WebSocketDisconnect:
+        manager.disconnect(user_id, websocket)
+    except Exception as e:
+        logger.error(f"WebSocket error for user {user_id}: {e}")
+        manager.disconnect(user_id, websocket)
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

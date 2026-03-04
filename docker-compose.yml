@@ -1,6 +1,19 @@
 version: '3.8'
 
 services:
+  stashpad-server:
+    build: ./stashpad-server
+    ports:
+      - "8000:8000"
+    restart: always
+
+  stashpad-web:
+    # Reserved for future usage
+    build: ./stashpad-web
+    ports:
+      - "8080:80"
+    depends_on:
+      - stashpad-server
   agent-sandbox:
     build:
       context: .devcontainer
