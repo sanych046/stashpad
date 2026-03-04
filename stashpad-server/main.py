@@ -64,15 +64,31 @@ async def request_session(request: QRSessionRequest):
     return {"status": "ok", "message": "Session initiated"}
 
 @app.post("/api/auth/verify")
-async def verify_session(session_id: str, user_id: str):
-    """Mobile device verifies and authorizes the session."""
+async def verify_session(session_id: str, user_id: str, pairing_key: str):
+    """Mobile device verifies and authorizes the session, providing the pairing key."""
     if session_id not in qr_sessions:
         raise HTTPException(status_code=404, detail="Session not found")
     
     qr_sessions[session_id]["authorized"] = True
     qr_sessions[session_id]["peer_id"] = user_id
+    qr_sessions[session_id]["pairing_key"] = pairing_key
     logger.info(f"Session {session_id} authorized for user {user_id}")
     return {"status": "ok", "message": "Session authorized"}
+
+@app.get("/api/auth/status")
+async def get_session_status(session_id: str):
+    """Web client polls for session status."""
+    if session_id not in qr_sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    session = qr_sessions[session_id]
+    if session["authorized"]:
+        return {
+            "authorized": True,
+            "user_id": session["peer_id"],
+            "pairing_key": session["pairing_key"]
+        }
+    return {"authorized": False}
 
 @app.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str):

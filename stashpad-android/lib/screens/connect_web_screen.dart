@@ -1,60 +1,45 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:http/http.dart' as http;
+import 'package:cryptography/cryptography.dart';
 
-class ConnectWebScreen extends StatefulWidget {
-  const ConnectWebScreen({super.key});
+  void _handleConnect(String code) async {
+    try {
+      final Map<String, dynamic> data = json.decode(code);
+      final String sessionId = data['sessionId'];
+      final String serverUrl = data['serverUrl'];
+      
+      // Generate a random 256-bit pairing key
+      final algorithm = AesGcm.with256bits();
+      final secretKey = await algorithm.newSecretKey();
+      final secretKeyBytes = await secretKey.extractBytes();
+      final pairingKeyBase64 = base64.encode(secretKeyBytes);
+      
+      const String userId = 'test-user-123'; // Placeholder for actual user account ID
+      
+      final response = await http.post(
+        Uri.parse('$serverUrl/api/auth/verify?session_id=$sessionId&user_id=$userId&pairing_key=$pairingKeyBase64'),
+      );
 
-  @override
-  State<ConnectWebScreen> createState() => _ConnectWebScreenState();
-}
-
-class _ConnectWebScreenState extends State<ConnectWebScreen> {
-  final MobileScannerController _controller = MobileScannerController();
-  bool _isConnecting = false;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _onDetect(BarcodeCapture capture) {
-    if (_isConnecting) return;
-
-    final List<Barcode> barcodes = capture.barcodes;
-    if (barcodes.isNotEmpty) {
-      final String? code = barcodes.first.rawValue;
-      if (code != null) {
-        setState(() {
-          _isConnecting = true;
-        });
-        
-        // Handle the scanned code (placeholder for actual sync logic)
-        _handleConnect(code);
-      }
-    }
-  }
-
-  void _handleConnect(String code) {
-    // In a real implementation, this would establish a secure connection (e.g. via WebSocket/Peer-to-Peer)
-    // using the data provided in the QR code.
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Connecting to web client: ${code.substring(0, code.length > 20 ? 20 : code.length)}...'),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-
-    // Mock successful connection after a short delay
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
+      if (response.statusCode == 200 && mounted) {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Connected to web client successfully!')),
         );
+      } else {
+        throw Exception('Failed to verify session: ${response.statusCode}');
       }
-    });
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isConnecting = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Connection failed: $e')),
+        );
+      }
+    }
   }
 
   @override
