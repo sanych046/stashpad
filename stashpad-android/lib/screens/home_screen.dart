@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/note.dart';
 import '../services/database_service.dart';
 import '../widgets/note_editor_dialog.dart';
+import 'connect_web_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -108,7 +109,9 @@ class _HomeScreenState extends State<HomeScreen> {
           PopupMenuButton<String>(
             onSelected: (value) {
               if (value == 'connect') {
-                _showConnectWebClient(context);
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (context) => const ConnectWebScreen()),
+                );
               } else if (value == 'settings') {
                 _showSettings(context);
               }
@@ -286,36 +289,6 @@ class _HomeScreenState extends State<HomeScreen> {
         onPressed: () => _createNewNote(context),
         elevation: 2,
         child: const Icon(Icons.add),
-      ),
-    );
-  }
-
-  void _showConnectWebClient(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Connect Web Client'),
-        content: const Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.qr_code_scanner, size: 64),
-            SizedBox(height: 16),
-            Text('Scan the QR code on the stashpad web application to sync your notes.'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-          FilledButton(
-            onPressed: () {
-              // TODO: Implement actual QR scanning
-              Navigator.pop(context);
-            },
-            child: const Text('Scan Now'),
-          ),
-        ],
       ),
     );
   }
