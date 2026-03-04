@@ -1,10 +1,12 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
+import 'package:pasteboard/pasteboard.dart';
 import '../models/note.dart';
 import '../services/database_service.dart';
 
@@ -147,6 +149,57 @@ class _NoteEditorDialogState extends State<NoteEditorDialog> {
     }
   }
 
+  Future<void> _pasteImage() async {
+    try {
+      final bytes = await Pasteboard.image;
+      if (bytes != null) {
+        final tempDir = await getTemporaryDirectory();
+        final file = File('${tempDir.path}/pasted_${DateTime.now().millisecondsSinceEpoch}.png');
+        await file.writeAsBytes(bytes);
+        
+        setState(() {
+          _attachments.add(
+            Attachment(
+              id: _uuid.v4(),
+              filename: 'Pasted_Image_${DateTime.now().millisecondsSinceEpoch}.png',
+              size: bytes.length,
+              mimeType: 'image/png',
+              localPath: file.path,
+            ),
+          );
+        });
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Image pasted from clipboard!')),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No image found in clipboard')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error pasting image: $e')),
+        );
+      }
+    }
+  }
+
+  void _copyToClipboard() {
+    final text = '${_titleController.text}\n\n${_contentController.text}'.trim();
+    if (text.isEmpty) return;
+    
+    Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Note copied to clipboard!')),
+    );
+  }
+
   void _showLabelPicker() async {
     final allLabels = await _dbService.getLabels();
     if (!mounted) return;
@@ -223,7 +276,17 @@ class _NoteEditorDialogState extends State<NoteEditorDialog> {
     final isEditing = widget.existingNote != null;
 
     return AlertDialog(
-      title: Text(isEditing ? 'Edit Stash' : 'New Stash'),
+      title: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(isEditing ? 'Edit Stash' : 'New Stash'),
+          IconButton(
+            icon: const Icon(Icons.copy_outlined, size: 20),
+            onPressed: _copyToClipboard,
+            tooltip: 'Copy text to buffer',
+          ),
+        ],
+      ),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -296,6 +359,7 @@ class _NoteEditorDialogState extends State<NoteEditorDialog> {
               alignment: WrapAlignment.center,
               children: [
                 _buildAttachButton(Icons.image, 'Image', () => _pickFile(FileType.image)),
+                _buildAttachButton(Icons.content_paste_go, 'Paste', _pasteImage),
                 _buildAttachButton(Icons.camera_alt, 'Photo', _takePhoto),
                 _buildAttachButton(Icons.videocam, 'Video', () => _pickFile(FileType.video)),
                 _buildAttachButton(Icons.video_call, 'Record', _recordVideo),

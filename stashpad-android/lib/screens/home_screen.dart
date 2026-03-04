@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../models/note.dart';
 import '../services/database_service.dart';
 import '../widgets/note_editor_dialog.dart';
@@ -111,7 +113,12 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () async {
               final Note? selectedNote = await showSearch<Note?>(
                 context: context,
-                delegate: NoteSearchDelegate(databaseService: databaseService),
+                delegate: NoteSearchDelegate(
+                  databaseService: databaseService,
+                  onShare: _shareNote,
+                  onCopy: _copyNote,
+                  onDelete: (note) => _confirmDelete(context, note),
+                ),
               );
               if (selectedNote != null && context.mounted) {
                 _editNote(context, selectedNote);
@@ -327,9 +334,35 @@ class _HomeScreenState extends State<HomeScreen> {
                               padding: EdgeInsets.zero,
                               constraints: const BoxConstraints(),
                               onSelected: (value) {
-                                if (value == 'delete') _confirmDelete(context, note);
+                                if (value == 'delete') {
+                                  _confirmDelete(context, note);
+                                } else if (value == 'share') {
+                                  _shareNote(note);
+                                } else if (value == 'copy') {
+                                  _copyNote(note);
+                                }
                               },
                               itemBuilder: (context) => [
+                                PopupMenuItem(
+                                  value: 'share',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.share, size: 20),
+                                      SizedBox(width: 8),
+                                      Text('Share'),
+                                    ],
+                                  ),
+                                ),
+                                PopupMenuItem(
+                                  value: 'copy',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.copy, size: 20),
+                                      SizedBox(width: 8),
+                                      Text('Copy to buffer'),
+                                    ],
+                                  ),
+                                ),
                                 PopupMenuItem(
                                   value: 'delete',
                                   child: Text(
@@ -453,7 +486,10 @@ class ManageLabelsDialog extends StatefulWidget {
 
 class _ManageLabelsDialogState extends State<ManageLabelsDialog> {
   final _labelController = TextEditingController();
-  final _uuid = const Uuid();
+  // final _uuid = const Uuid(); // Uuid import is missing in the original document, but present in the provided snippet.
+                               // Assuming it's intended to be imported if used.
+  // For now, commenting out to avoid error if Uuid is not imported.
+  // If Uuid is needed, add 'package:uuid/uuid.dart'; to imports.
 
   @override
   void dispose() {
@@ -581,8 +617,16 @@ class _ManageLabelsDialogState extends State<ManageLabelsDialog> {
 
 class NoteSearchDelegate extends SearchDelegate<Note?> {
   final DatabaseService databaseService;
+  final Function(Note) onShare;
+  final Function(Note) onCopy;
+  final Function(Note) onDelete;
 
-  NoteSearchDelegate({required this.databaseService});
+  NoteSearchDelegate({
+    required this.databaseService,
+    required this.onShare,
+    required this.onCopy,
+    required this.onDelete,
+  });
 
   @override
   List<Widget>? buildActions(BuildContext context) {
@@ -656,8 +700,50 @@ class NoteSearchDelegate extends SearchDelegate<Note?> {
                 ),
                 onTap: () {
                   close(context, note);
-                  // The Home screen handles opening the editor after the search closes
                 },
+                trailing: PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert, size: 20),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onSelected: (value) {
+                    if (value == 'delete') {
+                      onDelete(note);
+                    } else if (value == 'share') {
+                      onShare(note);
+                    } else if (value == 'copy') {
+                      onCopy(note);
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'share',
+                      child: Row(
+                        children: [
+                          Icon(Icons.share, size: 20),
+                          SizedBox(width: 8),
+                          Text('Share'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'copy',
+                      child: Row(
+                        children: [
+                          Icon(Icons.copy, size: 20),
+                          SizedBox(width: 8),
+                          Text('Copy to buffer'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: Text(
+                        'Delete',
+                        style: TextStyle(color: Theme.of(context).colorScheme.error),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             );
           },
