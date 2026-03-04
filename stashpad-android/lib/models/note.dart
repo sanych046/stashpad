@@ -30,14 +30,21 @@ class Attachment {
 
   factory Attachment.fromMap(Map<String, dynamic> map) {
     return Attachment(
-      id: map['id'],
-      filename: map['filename'],
-      size: map['size'],
-      mimeType: map['mimeType'],
-      localPath: map['localPath'],
-      remoteUrl: map['remoteUrl'],
+      id: _toUtf8String(map['id']),
+      filename: _toUtf8String(map['filename']),
+      size: map['size'] as int,
+      mimeType: _toUtf8String(map['mimeType']),
+      localPath: _toUtf8String(map['localPath']),
+      remoteUrl: _toUtf8String(map['remoteUrl']),
     );
   }
+}
+
+String _toUtf8String(dynamic value) {
+  if (value == null) return '';
+  if (value is String) return value;
+  if (value is List<int>) return utf8.decode(value);
+  return value.toString();
 }
 
 class Note {
@@ -105,15 +112,15 @@ class Note {
 
   factory Note.fromMap(Map<String, dynamic> map, {List<Attachment> attachments = const []}) {
     return Note(
-      id: map['id'],
-      title: map['title'],
-      content: map['content'],
-      category: map['category'] ?? 'General',
-      type: map['type'] ?? 'TEXT',
-      createdAt: DateTime.parse(map['createdAt']),
-      updatedAt: DateTime.parse(map['updatedAt']),
+      id: _toUtf8String(map['id']),
+      title: _toUtf8String(map['title']),
+      content: _toUtf8String(map['content']),
+      category: _toUtf8String(map['category'] ?? 'General'),
+      type: _toUtf8String(map['type'] ?? 'TEXT'),
+      createdAt: DateTime.parse(_toUtf8String(map['createdAt'])),
+      updatedAt: DateTime.parse(_toUtf8String(map['updatedAt'])),
       isPinned: map['isPinned'] == 1,
-      color: map['color'] ?? '#FFFFFF',
+      color: _toUtf8String(map['color'] ?? '#FFFFFF'),
       attachments: attachments,
     );
   }

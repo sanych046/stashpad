@@ -31,6 +31,7 @@ class DatabaseService {
       version: 2,
       password: password,
       onCreate: (db, version) async {
+        await db.execute("PRAGMA encoding = 'UTF-8';");
         await db.execute('''
           CREATE TABLE notes (
             id TEXT PRIMARY KEY,
@@ -72,6 +73,9 @@ class DatabaseService {
             )
           ''');
         }
+      },
+      onOpen: (db) async {
+        await db.execute("PRAGMA encoding = 'UTF-8';");
       },
     );
   }
