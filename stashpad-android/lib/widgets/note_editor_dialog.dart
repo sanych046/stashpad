@@ -42,15 +42,21 @@ class _NoteEditorDialogState extends State<NoteEditorDialog> {
     if (result != null) {
       setState(() {
         for (var file in result.files) {
-          _attachments.add(
-            Attachment(
-              id: _uuid.v4(),
-              filename: file.name,
-              size: file.size,
-              mimeType: _getMimeType(file.extension, type),
-              localPath: file.path,
-            ),
-          );
+          if (file.path != null) {
+            _attachments.add(
+              Attachment(
+                id: _uuid.v4(),
+                filename: file.name,
+                size: file.size,
+                mimeType: _getMimeType(file.extension, type),
+                localPath: file.path,
+              ),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Could not access file: ${file.name}')),
+            );
+          }
         }
       });
     }

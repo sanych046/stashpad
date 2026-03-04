@@ -76,6 +76,7 @@ class DatabaseService {
       },
       onOpen: (db) async {
         await db.execute("PRAGMA encoding = 'UTF-8';");
+        await db.execute("PRAGMA foreign_keys = ON;");
       },
     );
   }
