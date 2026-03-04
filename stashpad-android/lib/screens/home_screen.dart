@@ -13,6 +13,9 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  String? _selectedLabelId; // null = All, 'unlabeled' = Unlabeled, else = labelId
+  String _selectedLabelName = 'Stashpad';
+
   void _createNewNote(BuildContext context) async {
     final databaseService = Provider.of<DatabaseService>(context, listen: false);
     
@@ -84,13 +87,22 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  void _showManageLabelsDialog(BuildContext context) async {
+    final databaseService = Provider.of<DatabaseService>(context, listen: false);
+    await showDialog(
+      context: context,
+      builder: (context) => ManageLabelsDialog(databaseService: databaseService),
+    );
+    setState(() {}); // Refresh labels in drawer
+  }
+
   @override
   Widget build(BuildContext context) {
     final databaseService = Provider.of<DatabaseService>(context);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Stashpad'),
+        title: Text(_selectedLabelName),
         elevation: 0,
         scrolledUnderElevation: 2,
         actions: [
@@ -141,8 +153,111 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
+      drawer: Drawer(
+        child: Column(
+          children: [
+            DrawerHeader(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primaryContainer,
+              ),
+              child: Center(
+                child: Text(
+                  'Stashpad',
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.lightbulb_outline),
+              title: const Text('Notes'),
+              selected: _selectedLabelId == null,
+              onTap: () {
+                setState(() {
+                  _selectedLabelId = null;
+                  _selectedLabelName = 'Stashpad';
+                });
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.label_off_outlined),
+              title: const Text('Unlabeled'),
+              selected: _selectedLabelId == 'unlabeled',
+              onTap: () {
+                setState(() {
+                  _selectedLabelId = 'unlabeled';
+                  _selectedLabelName = 'Unlabeled';
+                });
+                Navigator.pop(context);
+              },
+            ),
+            const Divider(),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'LABELS',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.outline,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => _showManageLabelsDialog(context),
+                    child: const Text('Edit'),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: FutureBuilder<List<Label>>(
+                future: databaseService.getLabels(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                    return const SizedBox();
+                  }
+                  final labels = snapshot.data!;
+                  return ListView.builder(
+                    padding: EdgeInsets.zero,
+                    shrinkWrap: true,
+                    itemCount: labels.length,
+                    itemBuilder: (context, index) {
+                      final label = labels[index];
+                      return ListTile(
+                        leading: const Icon(Icons.label_outlined),
+                        title: Text(label.name),
+                        selected: _selectedLabelId == label.id,
+                        onTap: () {
+                          setState(() {
+                            _selectedLabelId = label.id;
+                            _selectedLabelName = label.name;
+                          });
+                          Navigator.pop(context);
+                        },
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.settings_outlined),
+              title: const Text('Settings'),
+              onTap: () {
+                Navigator.pop(context);
+                _showSettings(context);
+              },
+            ),
+          ],
+        ),
+      ),
       body: FutureBuilder<List<Note>>(
-        future: databaseService.getNotes(),
+        future: databaseService.getNotes(labelId: _selectedLabelId),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -154,13 +269,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(
-                    Icons.lightbulb_outline, 
+                    _selectedLabelId == null ? Icons.lightbulb_outline : Icons.label_outline, 
                     size: 120, 
                     color: Theme.of(context).colorScheme.outlineVariant
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Notes you add appear here',
+                    _selectedLabelId == null 
+                      ? 'Notes you add appear here'
+                      : 'No notes with this label',
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       color: Theme.of(context).colorScheme.outline
                     ),
@@ -231,6 +348,24 @@ class _HomeScreenState extends State<HomeScreen> {
                             maxLines: 5,
                             overflow: TextOverflow.ellipsis,
                             style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ],
+                        if (note.labels.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 4,
+                            runSpacing: 4,
+                            children: note.labels.map((label) => Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.surfaceVariant,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                label.name,
+                                style: Theme.of(context).textTheme.labelSmall,
+                              ),
+                            )).toList(),
                           ),
                         ],
                         if (note.attachments.isNotEmpty) ...[
@@ -304,6 +439,143 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mimeType.startsWith('video/')) return Icons.movie;
     if (mimeType.startsWith('audio/')) return Icons.audiotrack;
     return Icons.insert_drive_file;
+  }
+}
+
+class ManageLabelsDialog extends StatefulWidget {
+  final DatabaseService databaseService;
+
+  const ManageLabelsDialog({super.key, required this.databaseService});
+
+  @override
+  State<ManageLabelsDialog> createState() => _ManageLabelsDialogState();
+}
+
+class _ManageLabelsDialogState extends State<ManageLabelsDialog> {
+  final _labelController = TextEditingController();
+  final _uuid = const Uuid();
+
+  @override
+  void dispose() {
+    _labelController.dispose();
+    super.dispose();
+  }
+
+  void _addLabel() async {
+    if (_labelController.text.trim().isEmpty) return;
+    
+    final newLabel = Label(
+      id: _uuid.v4(),
+      name: _labelController.text.trim(),
+      createdAt: DateTime.now(),
+    );
+    
+    await widget.databaseService.insertLabel(newLabel);
+    _labelController.clear();
+    setState(() {});
+  }
+
+  void _deleteLabel(String id) async {
+    await widget.databaseService.deleteLabel(id);
+    setState(() {});
+  }
+
+  void _editLabel(Label label) async {
+    final editController = TextEditingController(text: label.name);
+    final String? newName = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Label'),
+        content: TextField(
+          controller: editController,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Label name'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, editController.text.trim()), child: const Text('Save')),
+        ],
+      ),
+    );
+
+    if (newName != null && newName.isNotEmpty && newName != label.name) {
+      await widget.databaseService.updateLabel(label.copyWith(name: newName));
+      setState(() {});
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Edit Labels'),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _labelController,
+                    decoration: const InputDecoration(
+                      hintText: 'Create new label',
+                      isDense: true,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.check),
+                  onPressed: _addLabel,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Flexible(
+              child: FutureBuilder<List<Label>>(
+                future: widget.databaseService.getLabels(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                    return const Text('No labels yet');
+                  }
+                  final labels = snapshot.data!;
+                  return ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: labels.length,
+                    itemBuilder: (context, index) {
+                      final label = labels[index];
+                      return ListTile(
+                        leading: const Icon(Icons.label_outlined, size: 20),
+                        title: Text(label.name),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit_outlined, size: 20),
+                              onPressed: () => _editLabel(label),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, size: 20),
+                              onPressed: () => _deleteLabel(label.id),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Done'),
+        ),
+      ],
+    );
   }
 }
 

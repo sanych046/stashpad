@@ -47,54 +47,97 @@ String _toUtf8String(dynamic value) {
   return value.toString();
 }
 
+class Label {
+  final String id;
+  final String name;
+  final DateTime createdAt;
+
+  Label({
+    required this.id,
+    required this.name,
+    required this.createdAt,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'name': name,
+      'createdAt': createdAt.toIso8601String(),
+    };
+  }
+
+  factory Label.fromMap(Map<String, dynamic> map) {
+    return Label(
+      id: map['id'] as String,
+      name: _toUtf8String(map['name']),
+      createdAt: DateTime.parse(map['createdAt'] as String),
+    );
+  }
+
+  Label copyWith({String? name}) {
+    return Label(
+      id: id,
+      name: name ?? this.name,
+      createdAt: createdAt,
+    );
+  }
+}
+
 class Note {
   final String id;
   final String title;
   final String content;
-  final String category;
-  final String type;
   final DateTime createdAt;
   final DateTime updatedAt;
-  final bool isPinned;
-  final String color;
   final List<Attachment> attachments;
+  final List<Label> labels;
 
   Note({
     required this.id,
     required this.title,
     required this.content,
-    this.category = 'General',
-    this.type = 'TEXT',
     required this.createdAt,
     required this.updatedAt,
-    this.isPinned = false,
-    this.color = '#FFFFFF',
     this.attachments = const [],
+    this.labels = const [],
   });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'title': title,
+      'content': content,
+      'createdAt': createdAt.toIso8601String(),
+      'updatedAt': updatedAt.toIso8601String(),
+    };
+  }
+
+  factory Note.fromMap(Map<String, dynamic> map, {List<Attachment> attachments = const [], List<Label> labels = const []}) {
+    return Note(
+      id: map['id'] as String,
+      title: _toUtf8String(map['title']),
+      content: _toUtf8String(map['content']),
+      createdAt: DateTime.parse(map['createdAt'] as String),
+      updatedAt: DateTime.parse(map['updatedAt'] as String),
+      attachments: attachments,
+      labels: labels,
+    );
+  }
 
   Note copyWith({
     String? title,
     String? content,
-    String? category,
-    String? type,
     DateTime? updatedAt,
-    bool? isPinned,
-    String? color,
     List<Attachment>? attachments,
+    List<Label>? labels,
   }) {
     return Note(
       id: id,
       title: title ?? this.title,
       content: content ?? this.content,
-      category: category ?? this.category,
-      type: type ?? this.type,
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
-      isPinned: isPinned ?? this.isPinned,
-      color: color ?? this.color,
       attachments: attachments ?? this.attachments,
-    );
-  }
 
   Map<String, dynamic> toMap() {
     return {

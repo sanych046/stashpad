@@ -6,6 +6,7 @@ import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import '../models/note.dart';
+import '../services/database_service.dart';
 
 class NoteEditorDialog extends StatefulWidget {
   final Note? existingNote;
@@ -20,9 +21,11 @@ class _NoteEditorDialogState extends State<NoteEditorDialog> {
   late TextEditingController _titleController;
   late TextEditingController _contentController;
   late List<Attachment> _attachments;
+  late List<Label> _labels;
   final _uuid = const Uuid();
   final _imagePicker = ImagePicker();
   final _audioRecorder = AudioRecorder();
+  final _dbService = DatabaseService();
   bool _isRecording = false;
 
   @override
@@ -31,6 +34,7 @@ class _NoteEditorDialogState extends State<NoteEditorDialog> {
     _titleController = TextEditingController(text: widget.existingNote?.title ?? '');
     _contentController = TextEditingController(text: widget.existingNote?.content ?? '');
     _attachments = List.from(widget.existingNote?.attachments ?? []);
+    _labels = List.from(widget.existingNote?.labels ?? []);
   }
 
   @override
@@ -143,6 +147,67 @@ class _NoteEditorDialogState extends State<NoteEditorDialog> {
     }
   }
 
+  void _showLabelPicker() async {
+    final allLabels = await _dbService.getLabels();
+    if (!mounted) return;
+
+    final selectedLabels = await showDialog<List<Label>>(
+      context: context,
+      builder: (context) {
+        List<Label> tempSelected = List.from(_labels);
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Select Labels'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: allLabels.isEmpty
+                    ? const Center(child: Text('No labels created yet.'))
+                    : ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: allLabels.length,
+                        itemBuilder: (context, index) {
+                          final label = allLabels[index];
+                          final isSelected = tempSelected.any((l) => l.id == label.id);
+                          return CheckboxListTile(
+                            title: Text(label.name),
+                            value: isSelected,
+                            onChanged: (bool? value) {
+                              setDialogState(() {
+                                if (value == true) {
+                                  tempSelected.add(label);
+                                } else {
+                                  tempSelected.removeWhere((l) => l.id == label.id);
+                                }
+                              });
+                            },
+                          );
+                        },
+                      ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(context, tempSelected),
+                  child: const Text('Done'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (selectedLabels != null) {
+      setState(() {
+        _labels = selectedLabels;
+      });
+    }
+  }
+
   String _getMimeType(String? extension, FileType type) {
     if (extension != null) return 'application/$extension';
     switch (type) {
@@ -162,6 +227,7 @@ class _NoteEditorDialogState extends State<NoteEditorDialog> {
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             TextField(
               controller: _titleController,
@@ -182,6 +248,32 @@ class _NoteEditorDialogState extends State<NoteEditorDialog> {
               maxLines: 5,
               textCapitalization: TextCapitalization.sentences,
             ),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Labels', style: TextStyle(fontWeight: FontWeight.bold)),
+                TextButton.icon(
+                  onPressed: _showLabelPicker,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Manage'),
+                ),
+              ],
+            ),
+            if (_labels.isNotEmpty)
+              Wrap(
+                spacing: 8,
+                children: _labels.map((label) => Chip(
+                  label: Text(label.name, style: const TextStyle(fontSize: 12)),
+                  onDeleted: () {
+                    setState(() {
+                      _labels.removeWhere((l) => l.id == label.id);
+                    });
+                  },
+                )).toList(),
+              )
+            else
+              const Text('No labels assigned', style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.grey)),
             const SizedBox(height: 24),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -278,7 +370,7 @@ class _NoteEditorDialogState extends State<NoteEditorDialog> {
         ),
         FilledButton(
           onPressed: () {
-            if (_titleController.text.isEmpty && _contentController.text.isEmpty && _attachments.isEmpty) {
+            if (_titleController.text.isEmpty && _contentController.text.isEmpty && _attachments.isEmpty && _labels.isEmpty) {
               return;
             }
             final now = DateTime.now();
@@ -288,6 +380,7 @@ class _NoteEditorDialogState extends State<NoteEditorDialog> {
                   content: _contentController.text,
                   updatedAt: now,
                   attachments: _attachments,
+                  labels: _labels,
                 )
               : Note(
                   id: _uuid.v4(),
@@ -296,6 +389,7 @@ class _NoteEditorDialogState extends State<NoteEditorDialog> {
                   createdAt: now,
                   updatedAt: now,
                   attachments: _attachments,
+                  labels: _labels,
                 );
             Navigator.of(context).pop(note);
           },
