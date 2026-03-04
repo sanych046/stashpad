@@ -1,5 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:record/record.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import '../models/note.dart';
 
@@ -17,6 +21,9 @@ class _NoteEditorDialogState extends State<NoteEditorDialog> {
   late TextEditingController _contentController;
   late List<Attachment> _attachments;
   final _uuid = const Uuid();
+  final _imagePicker = ImagePicker();
+  final _audioRecorder = AudioRecorder();
+  bool _isRecording = false;
 
   @override
   void initState() {
@@ -30,6 +37,7 @@ class _NoteEditorDialogState extends State<NoteEditorDialog> {
   void dispose() {
     _titleController.dispose();
     _contentController.dispose();
+    _audioRecorder.dispose();
     super.dispose();
   }
 
@@ -59,6 +67,79 @@ class _NoteEditorDialogState extends State<NoteEditorDialog> {
           }
         }
       });
+    }
+  }
+
+  Future<void> _takePhoto() async {
+    final XFile? photo = await _imagePicker.pickImage(source: ImageSource.camera);
+    if (photo != null) {
+      final bytes = await photo.length();
+      setState(() {
+        _attachments.add(
+          Attachment(
+            id: _uuid.v4(),
+            filename: 'Photo_${DateTime.now().millisecondsSinceEpoch}.jpg',
+            size: bytes,
+            mimeType: 'image/jpeg',
+            localPath: photo.path,
+          ),
+        );
+      });
+    }
+  }
+
+  Future<void> _recordVideo() async {
+    final XFile? video = await _imagePicker.pickVideo(source: ImageSource.camera);
+    if (video != null) {
+      final bytes = await video.length();
+      setState(() {
+        _attachments.add(
+          Attachment(
+            id: _uuid.v4(),
+            filename: 'Video_${DateTime.now().millisecondsSinceEpoch}.mp4',
+            size: bytes,
+            mimeType: 'video/mp4',
+            localPath: video.path,
+          ),
+        );
+      });
+    }
+  }
+
+  Future<void> _toggleAudioRecording() async {
+    if (_isRecording) {
+      final path = await _audioRecorder.stop();
+      setState(() => _isRecording = false);
+      if (path != null) {
+        final file = File(path);
+        final bytes = await file.length();
+        setState(() {
+          _attachments.add(
+            Attachment(
+              id: _uuid.v4(),
+              filename: 'Audio_${DateTime.now().millisecondsSinceEpoch}.m4a',
+              size: bytes,
+              mimeType: 'audio/m4a',
+              localPath: path,
+            ),
+          );
+        });
+      }
+    } else {
+      if (await _audioRecorder.hasPermission()) {
+        final directory = await getTemporaryDirectory();
+        final path = '${directory.path}/audio_${_uuid.v4()}.m4a';
+        
+        const config = RecordConfig();
+        await _audioRecorder.start(config, path: path);
+        setState(() => _isRecording = true);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Microphone permission denied')),
+          );
+        }
+      }
     }
   }
 
@@ -102,15 +183,38 @@ class _NoteEditorDialogState extends State<NoteEditorDialog> {
               textCapitalization: TextCapitalization.sentences,
             ),
             const SizedBox(height: 24),
-            const Text('Attachments', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _buildAttachButton(Icons.image, 'Image', FileType.image),
-                _buildAttachButton(Icons.videocam, 'Video', FileType.video),
-                _buildAttachButton(Icons.audiotrack, 'Audio', FileType.audio),
-                _buildAttachButton(Icons.file_present, 'File', FileType.any),
+                const Text('Attachments', style: TextStyle(fontWeight: FontWeight.bold)),
+                if (_isRecording)
+                  const Row(
+                    children: [
+                      Icon(Icons.fiber_manual_record, color: Colors.red, size: 16),
+                      SizedBox(width: 4),
+                      Text('Recording...', style: TextStyle(color: Colors.red, fontSize: 12)),
+                    ],
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              alignment: WrapAlignment.center,
+              children: [
+                _buildAttachButton(Icons.image, 'Image', () => _pickFile(FileType.image)),
+                _buildAttachButton(Icons.camera_alt, 'Photo', _takePhoto),
+                _buildAttachButton(Icons.videocam, 'Video', () => _pickFile(FileType.video)),
+                _buildAttachButton(Icons.video_call, 'Record', _recordVideo),
+                _buildAttachButton(Icons.audiotrack, 'Audio', () => _pickFile(FileType.audio)),
+                _buildAttachButton(
+                  _isRecording ? Icons.stop : Icons.mic, 
+                  _isRecording ? 'Stop' : 'Voice', 
+                  _toggleAudioRecording,
+                  color: _isRecording ? Colors.red : null,
+                ),
+                _buildAttachButton(Icons.file_present, 'File', () => _pickFile(FileType.any)),
               ],
             ),
             if (_attachments.isNotEmpty) ...[
@@ -201,12 +305,13 @@ class _NoteEditorDialogState extends State<NoteEditorDialog> {
     );
   }
 
-  Widget _buildAttachButton(IconData icon, String label, FileType type) {
+  Widget _buildAttachButton(IconData icon, String label, VoidCallback onPressed, {Color? color}) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         IconButton.filledTonal(
-          onPressed: () => _pickFile(type),
-          icon: Icon(icon),
+          onPressed: onPressed,
+          icon: Icon(icon, color: color),
         ),
         Text(label, style: const TextStyle(fontSize: 10)),
       ],
