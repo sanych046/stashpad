@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:uuid/uuid.dart';
 import '../services/sync_service.dart';
 
@@ -19,6 +20,8 @@ class _PairingScreenState extends State<PairingScreen> {
   final String _serverUrl = 'http://localhost:8000'; // Adjust for production
   bool _isPoling = false;
   Timer? _timer;
+  String? _pairingCode;
+  int _expiresIn = 45;
 
   @override
   void initState() {
@@ -41,6 +44,10 @@ class _PairingScreenState extends State<PairingScreen> {
       );
 
       if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        setState(() {
+          _pairingCode = data['pairing_code'];
+        });
         _startPolling();
       }
     } catch (e) {
@@ -70,6 +77,14 @@ class _PairingScreenState extends State<PairingScreen> {
             if (mounted) {
               final syncService = Provider.of<SyncService>(context, listen: false);
               await syncService.connect(userId, _sessionId, base64.decode(keyBase64));
+            }
+          } else {
+            // Update pairing code and timer from polling response
+            if (mounted) {
+              setState(() {
+                _pairingCode = data['pairing_code'];
+                _expiresIn = data['expires_in'] ?? 45;
+              });
             }
           }
         }
@@ -117,6 +132,49 @@ class _PairingScreenState extends State<PairingScreen> {
                 size: 250.0,
               ),
             ),
+            const SizedBox(height: 24),
+            if (_pairingCode != null) ...[
+              const Text(
+                'OR ENTER CODE',
+                style: TextStyle(
+                  letterSpacing: 1.5,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                  color: Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      _pairingCode!,
+                      style: GoogleFonts.firaCode(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 4,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Refreshes in $_expiresIn s',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 32),
             const CircularProgressIndicator(),
             const SizedBox(height: 16),

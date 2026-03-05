@@ -14,6 +14,7 @@ class ConnectWebScreen extends StatefulWidget {
 class _ConnectWebScreenState extends State<ConnectWebScreen> {
   final MobileScannerController _controller = MobileScannerController();
   bool _isConnecting = false;
+  final String _serverUrl = 'http://localhost:8000'; // Define server URL for reuse
 
   @override
   void dispose() {
@@ -42,7 +43,78 @@ class _ConnectWebScreenState extends State<ConnectWebScreen> {
     try {
       final Map<String, dynamic> data = json.decode(code);
       final String sessionId = data['sessionId'];
-      final String serverUrl = data['serverUrl'];
+      final String serverUrl = data['serverUrl'] ?? _serverUrl;
+      
+      _authorizeSession(sessionId, serverUrl);
+    } catch (e) {
+      _showError('Invalid QR code format');
+    }
+  }
+
+  void _showManualEntry() async {
+    final TextEditingController codeController = TextEditingController();
+    final String? code = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Link by Code'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Enter the 6-character code displayed on the web client.'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: codeController,
+              autofocus: true,
+              maxLength: 6,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 4),
+              decoration: const InputDecoration(
+                hintText: 'XXXXXX',
+                counterText: '',
+                border: OutlineInputBorder(),
+              ),
+              textCapitalization: TextCapitalization.characters,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, codeController.text.trim().toUpperCase()),
+            child: const Text('Link'),
+          ),
+        ],
+      ),
+    );
+
+    if (code != null && code.length == 6) {
+      _handleManualConnect(code);
+    }
+  }
+
+  void _handleManualConnect(String code) async {
+    setState(() => _isConnecting = true);
+    
+    try {
+      final response = await http.get(
+        Uri.parse('$_serverUrl/api/auth/lookup?code=$code'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final sessionId = data['session_id'];
+        _authorizeSession(sessionId, _serverUrl);
+      } else {
+        throw Exception('Invalid or expired code');
+      }
+    } catch (e) {
+      _showError(e.toString());
+    }
+  }
+
+  void _authorizeSession(String sessionId, String serverUrl) async {
+    try {
+      setState(() => _isConnecting = true);
       
       // Generate a random 256-bit pairing key
       final algorithm = AesGcm.with256bits();
@@ -65,14 +137,16 @@ class _ConnectWebScreenState extends State<ConnectWebScreen> {
         throw Exception('Failed to verify session: ${response.statusCode}');
       }
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isConnecting = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Connection failed: $e')),
-        );
-      }
+      _showError(e.toString());
+    }
+  }
+
+  void _showError(String message) {
+    if (mounted) {
+      setState(() => _isConnecting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $message')),
+      );
     }
   }
 
@@ -83,6 +157,14 @@ class _ConnectWebScreenState extends State<ConnectWebScreen> {
         title: const Text('Connect Web Client'),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        actions: [
+          TextButton.icon(
+            onPressed: _showManualEntry,
+            icon: const Icon(Icons.keyboard, color: Colors.white),
+            label: const Text('Link by code', style: TextStyle(color: Colors.white)),
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       extendBodyBehindAppBar: true,
       body: Stack(

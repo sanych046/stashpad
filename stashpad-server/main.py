@@ -1,7 +1,7 @@
-import asyncio
-import json
-import uuid
 import logging
+import time
+import random
+import string
 from typing import Dict, Set, Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, status
 from pydantic import BaseModel
@@ -13,8 +13,15 @@ logger = logging.getLogger("stashpad-server")
 app = FastAPI(title="Stashpad Coordination Server")
 
 # In-memory stores for pairing and active relays
-# QR Session Store: session_id -> { "created_at": timestamp, "authorized": bool, "peer_id": optional }
+# QR Session Store: session_id -> { "created_at": timestamp, "authorized": bool, "peer_id": optional, "pairing_code": str, "expires_at": float }
 qr_sessions: Dict[str, dict] = {}
+# Mapping from 6-char code to session_id
+pairing_codes: Dict[str, str] = {}
+
+def generate_pairing_code():
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+
+PAIRING_CODE_DURATION = 45 # seconds
 
 # Connection Manager for WebSockets
 class ConnectionManager:
@@ -56,12 +63,35 @@ class QRSessionRequest(BaseModel):
 async def request_session(request: QRSessionRequest):
     """Web client requests a new pairing session."""
     session_id = request.session_id
+    code = generate_pairing_code()
+    
     qr_sessions[session_id] = {
         "authorized": False,
-        "peer_id": None
+        "peer_id": None,
+        "pairing_code": code,
+        "expires_at": time.time() + PAIRING_CODE_DURATION
     }
-    logger.info(f"Session request: {session_id}")
-    return {"status": "ok", "message": "Session initiated"}
+    pairing_codes[code] = session_id
+    
+    logger.info(f"Session request: {session_id} with code {code}")
+    return {"status": "ok", "message": "Session initiated", "pairing_code": code}
+
+@app.get("/api/auth/lookup")
+async def lookup_code(code: str):
+    """Mobile device looks up a session by its 6-character code."""
+    code = code.upper()
+    if code not in pairing_codes:
+        raise HTTPException(status_code=404, detail="Invalid or expired code")
+    
+    session_id = pairing_codes[code]
+    session = qr_sessions[session_id]
+    
+    if time.time() > session["expires_at"]:
+        # Clean up expired entry if encountered during lookup
+        del pairing_codes[code]
+        raise HTTPException(status_code=404, detail="Code expired")
+        
+    return {"status": "ok", "session_id": session_id}
 
 @app.post("/api/auth/verify")
 async def verify_session(session_id: str, user_id: str, pairing_key: str):
@@ -77,18 +107,40 @@ async def verify_session(session_id: str, user_id: str, pairing_key: str):
 
 @app.get("/api/auth/status")
 async def get_session_status(session_id: str):
-    """Web client polls for session status."""
+    """Web client polls for session status and rotates code if needed."""
     if session_id not in qr_sessions:
         raise HTTPException(status_code=404, detail="Session not found")
     
     session = qr_sessions[session_id]
+    
+    # Check if authorized
     if session["authorized"]:
         return {
             "authorized": True,
             "user_id": session["peer_id"],
             "pairing_key": session["pairing_key"]
         }
-    return {"authorized": False}
+    
+    # Check if code needs rotation
+    current_time = time.time()
+    if current_time > session["expires_at"]:
+        # Remove old code
+        old_code = session["pairing_code"]
+        if old_code in pairing_codes:
+            del pairing_codes[old_code]
+            
+        # Generate new code
+        new_code = generate_pairing_code()
+        session["pairing_code"] = new_code
+        session["expires_at"] = current_time + PAIRING_CODE_DURATION
+        pairing_codes[new_code] = session_id
+        logger.info(f"Rotated code for session {session_id} to {new_code}")
+
+    return {
+        "authorized": False,
+        "pairing_code": session["pairing_code"],
+        "expires_in": int(session["expires_at"] - current_time)
+    }
 
 @app.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str):
