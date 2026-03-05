@@ -22,6 +22,8 @@ class _PairingScreenState extends State<PairingScreen> {
   Timer? _timer;
   String? _pairingCode;
   int _expiresIn = 45;
+  String? _error;
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -37,6 +39,11 @@ class _PairingScreenState extends State<PairingScreen> {
 
   Future<void> _initiateSession() async {
     try {
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
+      
       final response = await http.post(
         Uri.parse('$_serverUrl/api/auth/request'),
         headers: {'Content-Type': 'application/json'},
@@ -47,11 +54,21 @@ class _PairingScreenState extends State<PairingScreen> {
         final data = json.decode(response.body);
         setState(() {
           _pairingCode = data['pairing_code'];
+          _isLoading = false;
         });
         _startPolling();
+      } else {
+        setState(() {
+          _error = 'Server returned ${response.statusCode}';
+          _isLoading = false;
+        });
       }
     } catch (e) {
       print('Error initiating session: $e');
+      setState(() {
+        _error = 'Could not connect to server';
+        _isLoading = false;
+      });
     }
   }
 
@@ -133,7 +150,14 @@ class _PairingScreenState extends State<PairingScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            if (_pairingCode != null) ...[
+            if (_isLoading)
+               const Text('Loading pairing code...')
+            else if (_error != null)
+              Text(
+                'Error: $_error',
+                style: const TextStyle(color: Colors.red),
+              )
+            else if (_pairingCode != null) ...[
               const Text(
                 'OR ENTER CODE',
                 style: TextStyle(
@@ -179,6 +203,11 @@ class _PairingScreenState extends State<PairingScreen> {
             const CircularProgressIndicator(),
             const SizedBox(height: 16),
             const Text('Waiting for authorization...'),
+            if (_error != null)
+              TextButton(
+                onPressed: _initiateSession,
+                child: const Text('Retry connection'),
+              ),
           ],
         ),
       ),

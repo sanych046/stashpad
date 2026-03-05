@@ -2,8 +2,11 @@ import logging
 import time
 import random
 import string
+import json
+import asyncio
 from typing import Dict, Set, Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 # Configure logging
@@ -11,6 +14,14 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("stashpad-server")
 
 app = FastAPI(title="Stashpad Coordination Server")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # In-memory stores for pairing and active relays
 # QR Session Store: session_id -> { "created_at": timestamp, "authorized": bool, "peer_id": optional, "pairing_code": str, "expires_at": float }
