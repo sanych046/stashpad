@@ -4,6 +4,40 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:http/http.dart' as http;
 import 'package:cryptography/cryptography.dart';
 
+class ConnectWebScreen extends StatefulWidget {
+  const ConnectWebScreen({super.key});
+
+  @override
+  State<ConnectWebScreen> createState() => _ConnectWebScreenState();
+}
+
+class _ConnectWebScreenState extends State<ConnectWebScreen> {
+  final MobileScannerController _controller = MobileScannerController();
+  bool _isConnecting = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onDetect(BarcodeCapture capture) {
+    if (_isConnecting) return;
+
+    final List<Barcode> barcodes = capture.barcodes;
+    if (barcodes.isNotEmpty) {
+      final String? code = barcodes.first.rawValue;
+      if (code != null) {
+        setState(() {
+          _isConnecting = true;
+        });
+        
+        // Handle the scanned code
+        _handleConnect(code);
+      }
+    }
+  }
+
   void _handleConnect(String code) async {
     try {
       final Map<String, dynamic> data = json.decode(code);

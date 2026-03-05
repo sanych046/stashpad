@@ -138,37 +138,8 @@ class Note {
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       attachments: attachments ?? this.attachments,
-
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'title': title,
-      'content': content,
-      'category': category,
-      'type': type,
-      'createdAt': createdAt.toIso8601String(),
-      'updatedAt': updatedAt.toIso8601String(),
-      'isPinned': isPinned ? 1 : 0,
-      'color': color,
-    };
-  }
-
-  factory Note.fromMap(Map<String, dynamic> map, {List<Attachment> attachments = const []}) {
-    return Note(
-      id: _toUtf8String(map['id']),
-      title: _toUtf8String(map['title']),
-      content: _toUtf8String(map['content']),
-      category: _toUtf8String(map['category'] ?? 'General'),
-      type: _toUtf8String(map['type'] ?? 'TEXT'),
-      createdAt: DateTime.parse(_toUtf8String(map['createdAt'])),
-      updatedAt: DateTime.parse(_toUtf8String(map['updatedAt'])),
-      isPinned: map['isPinned'] == 1,
-      color: _toUtf8String(map['color'] ?? '#FFFFFF'),
-      attachments: attachments,
+      labels: labels ?? this.labels,
     );
   }
-
-  String toJson() => json.encode(toMap());
-
-  factory Note.fromJson(String source) => Note.fromMap(json.decode(source));
 }
+

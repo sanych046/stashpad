@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:uuid/uuid.dart';
 import '../models/note.dart';
 import '../services/database_service.dart';
 import '../widgets/note_editor_dialog.dart';
@@ -35,6 +36,17 @@ class _HomeScreenState extends State<HomeScreen> {
         const SnackBar(content: Text('New stash created!')),
       );
     }
+  }
+
+  void _shareNote(Note note) {
+    Share.share('${note.title}\n\n${note.content}');
+  }
+
+  void _copyNote(Note note) {
+    Clipboard.setData(ClipboardData(text: '${note.title}\n\n${note.content}'));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Copied to clipboard')),
+    );
   }
 
   void _editNote(BuildContext context, Note note) async {
@@ -391,7 +403,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             children: note.labels.map((label) => Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.surfaceVariant,
+                                color: Theme.of(context).colorScheme.surfaceContainerHighest,
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
@@ -486,10 +498,7 @@ class ManageLabelsDialog extends StatefulWidget {
 
 class _ManageLabelsDialogState extends State<ManageLabelsDialog> {
   final _labelController = TextEditingController();
-  // final _uuid = const Uuid(); // Uuid import is missing in the original document, but present in the provided snippet.
-                               // Assuming it's intended to be imported if used.
-  // For now, commenting out to avoid error if Uuid is not imported.
-  // If Uuid is needed, add 'package:uuid/uuid.dart'; to imports.
+  final _uuid = const Uuid();
 
   @override
   void dispose() {

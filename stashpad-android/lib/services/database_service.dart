@@ -270,4 +270,3 @@ class DatabaseService {
     // ON DELETE CASCADE will handle note_labels entries
   }
 }
-```
