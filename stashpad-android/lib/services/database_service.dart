@@ -74,15 +74,18 @@ class DatabaseService {
         FOREIGN KEY (label_id) REFERENCES labels (id) ON DELETE CASCADE
       )
     ''');
+    await db.execute('''
+      CREATE TABLE sync_state(
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        userId TEXT,
+        sessionId TEXT,
+        keyBytes BLOB
+      )
+    ''');
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    if (oldVersion < 2) {
-      // Version 2 introduced foreign keys and Cascading deletes if not already present
-      // But we mostly need the new tables now.
-    }
     if (oldVersion < 3) {
-      // Version 3 adds labels and note_labels
       await db.execute('''
         CREATE TABLE IF NOT EXISTS labels(
           id TEXT PRIMARY KEY,
@@ -97,6 +100,16 @@ class DatabaseService {
           PRIMARY KEY (note_id, label_id),
           FOREIGN KEY (note_id) REFERENCES notes (id) ON DELETE CASCADE,
           FOREIGN KEY (label_id) REFERENCES labels (id) ON DELETE CASCADE
+        )
+      ''');
+    }
+    if (oldVersion < 4) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS sync_state(
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          userId TEXT,
+          sessionId TEXT,
+          keyBytes BLOB
         )
       ''');
     }
@@ -268,5 +281,34 @@ class DatabaseService {
     final db = await database;
     await db.delete('labels', where: 'id = ?', whereArgs: [id]);
     // ON DELETE CASCADE will handle note_labels entries
+  }
+
+  // Sync State persistence
+  Future<void> saveSyncState(String userId, String sessionId, List<int> keyBytes) async {
+    final db = await database;
+    await db.insert(
+      'sync_state',
+      {
+        'id': 1,
+        'userId': userId,
+        'sessionId': sessionId,
+        'keyBytes': keyBytes,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<Map<String, dynamic>?> getSyncState() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query('sync_state', where: 'id = 1');
+    if (maps.isNotEmpty) {
+      return maps.first;
+    }
+    return null;
+  }
+
+  Future<void> clearSyncState() async {
+    final db = await database;
+    await db.delete('sync_state');
   }
 }

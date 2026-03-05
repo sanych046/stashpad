@@ -52,8 +52,47 @@ class AuthWrapper extends StatelessWidget {
     
     if (syncService.isConnected) {
       return const HomeScreen();
+    } else if (syncService.userId != null) {
+      return const ConnectionLostScreen();
     } else {
       return const PairingScreen();
     }
+  }
+}
+
+class ConnectionLostScreen extends StatelessWidget {
+  const ConnectionLostScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.wifi_off_rounded,
+              size: 64,
+              color: Theme.of(context).colorScheme.error,
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Connection Lost',
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
+            const SizedBox(height: 16),
+            const Text('Could not reach the server or mobile app.'),
+            const SizedBox(height: 32),
+            ElevatedButton.icon(
+              onPressed: () {
+                Provider.of<SyncService>(context, listen: false).reconnect();
+              },
+              icon: const Icon(Icons.refresh),
+              label: const Text('Reconnect'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

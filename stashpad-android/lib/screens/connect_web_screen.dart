@@ -1,8 +1,13 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:http/http.dart' as http;
 import 'package:cryptography/cryptography.dart';
+import 'package:provider/provider.dart';
+import '../services/sync_service.dart';
+import '../services/database_service.dart';
 
 class ConnectWebScreen extends StatefulWidget {
   const ConnectWebScreen({super.key});
@@ -14,7 +19,11 @@ class ConnectWebScreen extends StatefulWidget {
 class _ConnectWebScreenState extends State<ConnectWebScreen> {
   final MobileScannerController _controller = MobileScannerController();
   bool _isConnecting = false;
-  final String _serverUrl = 'http://localhost:8000'; // Define server URL for reuse
+  
+  String get _serverUrl {
+    final String host = kIsWeb ? 'localhost' : (defaultTargetPlatform == TargetPlatform.android ? '10.0.2.2' : 'localhost');
+    return 'http://$host:8000';
+  }
 
   @override
   void dispose() {
@@ -62,19 +71,23 @@ class _ConnectWebScreenState extends State<ConnectWebScreen> {
           children: [
             const Text('Enter the 6-character code displayed on the web client.'),
             const SizedBox(height: 16),
-            TextField(
-              controller: codeController,
-              autofocus: true,
-              maxLength: 6,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 4),
-              decoration: const InputDecoration(
-                hintText: 'XXXXXX',
-                counterText: '',
-                border: OutlineInputBorder(),
+              TextField(
+                controller: codeController,
+                autofocus: true,
+                maxLength: 6,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, letterSpacing: 8),
+                decoration: const InputDecoration(
+                  hintText: 'XXXXXX',
+                  counterText: '',
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(vertical: 20),
+                ),
+                textCapitalization: TextCapitalization.characters,
+                inputFormatters: [
+                  UpperCaseTextFormatter(),
+                ],
               ),
-              textCapitalization: TextCapitalization.characters,
-            ),
           ],
         ),
         actions: [
@@ -129,16 +142,51 @@ class _ConnectWebScreenState extends State<ConnectWebScreen> {
       );
 
       if (response.statusCode == 200 && mounted) {
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Connected to web client successfully!')),
-        );
+        final syncService = Provider.of<SyncService>(context, listen: false);
+        final databaseService = Provider.of<DatabaseService>(context, listen: false);
+        
+        // Establish Sync Connection
+        await syncService.connect(userId, sessionId, secretKeyBytes, databaseService);
+        
+        // Trigger Full Sync
+        await syncService.syncAllNotes(databaseService);
+
+        if (mounted) {
+          setState(() => _isConnecting = false);
+          _showSuccessDialog();
+        }
       } else {
         throw Exception('Failed to verify session: ${response.statusCode}');
       }
     } catch (e) {
       _showError(e.toString());
     }
+  }
+
+  void _showSuccessDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green),
+            SizedBox(width: 12),
+            Text('Success!'),
+          ],
+        ),
+        content: const Text('Successfully linked with web client. Your notes are now being synchronized.'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop(); // Pop dialog
+              Navigator.of(context).pop(); // Pop ConnectWebScreen
+            },
+            child: const Text('Great!'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showError(String message) {
@@ -287,4 +335,14 @@ class _ScannerOverlayPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(CustomPainter oldDelegate) => false;
+}
+
+class UpperCaseTextFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    return TextEditingValue(
+      text: newValue.text.toUpperCase(),
+      selection: newValue.selection,
+    );
+  }
 }

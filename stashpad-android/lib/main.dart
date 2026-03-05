@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'services/database_service.dart';
+import 'services/sync_service.dart';
 import 'screens/home_screen.dart';
 
 void main() {
@@ -9,6 +10,9 @@ void main() {
       providers: [
         Provider<DatabaseService>(
           create: (_) => DatabaseService(),
+        ),
+        ChangeNotifierProvider<SyncService>(
+          create: (_) => SyncService(),
         ),
       ],
       child: const StashpadApp(),

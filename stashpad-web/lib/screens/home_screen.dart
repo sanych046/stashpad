@@ -1,8 +1,8 @@
-import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/sync_service.dart';
 import '../models/note.dart';
 import 'package:intl/intl.dart';
+import 'note_editor_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -16,7 +16,7 @@ class HomeScreen extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () {
-              Provider.of<SyncService>(context, listen: false).disconnect();
+              Provider.of<SyncService>(context, listen: false).logout();
             },
           ),
         ],
@@ -45,6 +45,20 @@ class HomeScreen extends StatelessWidget {
           );
         },
       ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          final result = await Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => const NoteEditorScreen(),
+            ),
+          );
+
+          if (result is Note) {
+            Provider.of<SyncService>(context, listen: false).syncNote(result);
+          }
+        },
+        child: const Icon(Icons.add),
+      ),
     );
   }
 }
@@ -60,8 +74,18 @@ class NoteCard extends StatelessWidget {
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
-        onTap: () {
-          // View details - could implement an editor here too
+        onTap: () async {
+          final result = await Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => NoteEditorScreen(existingNote: note),
+            ),
+          );
+
+          if (result == 'delete') {
+             Provider.of<SyncService>(context, listen: false).deleteNote(note.id);
+          } else if (result is Note) {
+             Provider.of<SyncService>(context, listen: false).syncNote(result);
+          }
         },
         child: Padding(
           padding: const EdgeInsets.all(16.0),

@@ -5,8 +5,10 @@ import 'package:share_plus/share_plus.dart';
 import 'package:uuid/uuid.dart';
 import '../models/note.dart';
 import '../services/database_service.dart';
+import '../services/sync_service.dart';
 import '../widgets/note_editor_dialog.dart';
 import 'connect_web_screen.dart';
+import 'linked_devices_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -19,6 +21,16 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _selectedLabelId; // null = All, 'unlabeled' = Unlabeled, else = labelId
   String _selectedLabelName = 'Stashpad';
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final databaseService = Provider.of<DatabaseService>(context, listen: false);
+      final syncService = Provider.of<SyncService>(context, listen: false);
+      syncService.tryAutoConnect(databaseService);
+    });
+  }
+
   void _createNewNote(BuildContext context) async {
     final databaseService = Provider.of<DatabaseService>(context, listen: false);
     
@@ -29,6 +41,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (newNote != null) {
       await databaseService.insertNote(newNote);
+      
+      if (!context.mounted) return;
+      // Sync if connected
+      final syncService = Provider.of<SyncService>(context, listen: false);
+      if (syncService.isConnected) {
+        await syncService.syncNote(newNote);
+      }
       if (!context.mounted) return;
       setState(() {});
       
@@ -59,6 +78,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (updatedNote != null) {
       await databaseService.updateNote(updatedNote);
+      
+      if (!context.mounted) return;
+      // Sync if connected
+      final syncService = Provider.of<SyncService>(context, listen: false);
+      if (syncService.isConnected) {
+        await syncService.syncNote(updatedNote);
+      }
       if (!context.mounted) return;
       setState(() {});
       
@@ -92,6 +118,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (confirm == true) {
       await databaseService.deleteNote(note.id);
+      
+      if (!context.mounted) return;
+      // Sync if connected
+      final syncService = Provider.of<SyncService>(context, listen: false);
+      if (syncService.isConnected) {
+        await syncService.deleteNote(note.id);
+      }
       if (!context.mounted) return;
       setState(() {});
       
@@ -143,6 +176,19 @@ class _HomeScreenState extends State<HomeScreen> {
                 Navigator.of(context).push(
                   MaterialPageRoute(builder: (context) => const ConnectWebScreen()),
                 );
+              } else if (value == 'linked_devices') {
+                final syncService = Provider.of<SyncService>(context, listen: false);
+                if (syncService.userId != null) {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => LinkedDevicesScreen(userId: syncService.userId!),
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Not connected to a sync account')),
+                  );
+                }
               } else if (value == 'settings') {
                 _showSettings(context);
               }
@@ -155,6 +201,16 @@ class _HomeScreenState extends State<HomeScreen> {
                     Icon(Icons.qr_code_scanner, size: 20),
                     SizedBox(width: 12),
                     Text('Connect Web client'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'linked_devices',
+                child: Row(
+                  children: [
+                    Icon(Icons.devices, size: 20),
+                    SizedBox(width: 12),
+                    Text('Linked devices'),
                   ],
                 ),
               ),

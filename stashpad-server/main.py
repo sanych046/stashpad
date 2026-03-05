@@ -37,33 +37,56 @@ PAIRING_CODE_DURATION = 45 # seconds
 # Connection Manager for WebSockets
 class ConnectionManager:
     def __init__(self):
-        # user_id -> set of active WebSockets
-        self.active_connections: Dict[str, Set[WebSocket]] = {}
+        # user_id -> {session_id: set of WebSockets}
+        self.active_sessions: Dict[str, Dict[str, Set[WebSocket]]] = {}
 
-    async def connect(self, user_id: str, websocket: WebSocket):
+    async def connect(self, user_id: str, session_id: str, websocket: WebSocket):
         await websocket.accept()
-        if user_id not in self.active_connections:
-            self.active_connections[user_id] = set()
-        self.active_connections[user_id].add(websocket)
-        logger.info(f"Client connected for user {user_id}. Active connections: {len(self.active_connections[user_id])}")
+        if user_id not in self.active_sessions:
+            self.active_sessions[user_id] = {}
+        if session_id not in self.active_sessions[user_id]:
+            self.active_sessions[user_id][session_id] = set()
+        self.active_sessions[user_id][session_id].add(websocket)
+        
+        # Update session metadata if it exists
+        if session_id in qr_sessions:
+            qr_sessions[session_id]["last_activity"] = time.time()
+            
+        logger.info(f"Client connected for user {user_id}, session {session_id}. Active sessions: {len(self.active_sessions[user_id])}")
 
-    def disconnect(self, user_id: str, websocket: WebSocket):
-        if user_id in self.active_connections:
-            self.active_connections[user_id].discard(websocket)
-            if not self.active_connections[user_id]:
-                del self.active_connections[user_id]
-        logger.info(f"Client disconnected for user {user_id}")
+    def disconnect(self, user_id: str, session_id: str, websocket: WebSocket):
+        if user_id in self.active_sessions and session_id in self.active_sessions[user_id]:
+            self.active_sessions[user_id][session_id].discard(websocket)
+            if not self.active_sessions[user_id][session_id]:
+                del self.active_sessions[user_id][session_id]
+            if not self.active_sessions[user_id]:
+                del self.active_sessions[user_id]
+        logger.info(f"Client disconnected for user {user_id}, session {session_id}")
 
     async def relay_to_user(self, user_id: str, message: dict, exclude: Optional[WebSocket] = None):
-        if user_id in self.active_connections:
-            connections = self.active_connections[user_id]
+        if user_id in self.active_sessions:
             data = json.dumps(message)
             tasks = []
-            for connection in connections:
-                if connection != exclude:
-                    tasks.append(connection.send_text(data))
+            for session_id, connections in self.active_sessions[user_id].items():
+                for connection in connections:
+                    if connection != exclude:
+                        tasks.append(connection.send_text(data))
             if tasks:
                 await asyncio.gather(*tasks)
+
+    async def disconnect_session(self, user_id: str, session_id: str):
+        if user_id in self.active_sessions and session_id in self.active_sessions[user_id]:
+            connections = list(self.active_sessions[user_id][session_id])
+            data = json.dumps({"type": "SESSION_REVOKED"})
+            for connection in connections:
+                try:
+                    await connection.send_text(data)
+                    await connection.close()
+                except:
+                    pass
+            del self.active_sessions[user_id][session_id]
+            if not self.active_sessions[user_id]:
+                del self.active_sessions[user_id]
 
 manager = ConnectionManager()
 
@@ -80,7 +103,10 @@ async def request_session(request: QRSessionRequest):
         "authorized": False,
         "peer_id": None,
         "pairing_code": code,
-        "expires_at": time.time() + PAIRING_CODE_DURATION
+        "expires_at": time.time() + PAIRING_CODE_DURATION,
+        "created_at": time.time(),
+        "last_activity": time.time(),
+        "user_agent": "" # Will be populated on connect
     }
     pairing_codes[code] = session_id
     
@@ -153,25 +179,59 @@ async def get_session_status(session_id: str):
         "expires_in": int(session["expires_at"] - current_time)
     }
 
-@app.websocket("/ws/{user_id}")
-async def websocket_endpoint(websocket: WebSocket, user_id: str):
-    await manager.connect(user_id, websocket)
+@app.get("/api/sessions")
+async def get_user_sessions(user_id: str):
+    """Get active sessions for a user."""
+    sessions = []
+    for sid, session in qr_sessions.items():
+        if session.get("authorized") and session.get("peer_id") == user_id:
+            sessions.append({
+                "session_id": sid,
+                "user_agent": session.get("user_agent", "Unknown Device"),
+                "last_activity": session.get("last_activity", session.get("created_at")),
+                "is_online": user_id in manager.active_sessions and sid in manager.active_sessions[user_id]
+            })
+    return {"sessions": sessions}
+
+@app.post("/api/sessions/revoke")
+async def revoke_session(session_id: str, user_id: str):
+    """Revoke a session."""
+    if session_id in qr_sessions:
+        session = qr_sessions[session_id]
+        if session.get("peer_id") == user_id:
+            logger.info(f"Revoking session {session_id} for user {user_id}")
+            # Disconnect active WS
+            await manager.disconnect_session(user_id, session_id)
+            # Remove from sessions
+            del qr_sessions[session_id]
+            return {"status": "ok"}
+    raise HTTPException(status_code=404, detail="Session not found")
+
+@app.websocket("/ws/{user_id}/{session_id}")
+async def websocket_endpoint(websocket: WebSocket, user_id: str, session_id: str):
+    # Try to grab user agent for identification
+    ua = websocket.headers.get("user-agent", "Unknown Browser")
+    if session_id in qr_sessions:
+        qr_sessions[session_id]["user_agent"] = ua
+
+    await manager.connect(user_id, session_id, websocket)
     try:
         while True:
-            # Wait for data from one client
             data = await websocket.receive_text()
             message = json.loads(data)
             
-            # Relay encrypted payload to all other clients of the same user
-            # The server does not decrypt the 'payload' field
+            # Update last activity
+            if session_id in qr_sessions:
+                qr_sessions[session_id]["last_activity"] = time.time()
+
             logger.info(f"Relaying message type '{message.get('type')}' for user {user_id}")
             await manager.relay_to_user(user_id, message, exclude=websocket)
             
     except WebSocketDisconnect:
-        manager.disconnect(user_id, websocket)
+        manager.disconnect(user_id, session_id, websocket)
     except Exception as e:
         logger.error(f"WebSocket error for user {user_id}: {e}")
-        manager.disconnect(user_id, websocket)
+        manager.disconnect(user_id, session_id, websocket)
 
 @app.get("/health")
 async def health_check():
